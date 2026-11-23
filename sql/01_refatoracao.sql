@@ -1,149 +1,88 @@
 
--- REFATORAÇÃO DO BANCO DE DADOS DA BIBLIOTECA
--- Banco: PostgreSQL
+-- REFATORAÇÃO DO BANCO DE DADOS
+-- Biblioteca Universitária - SQLite
 
--- 1. Tabela de autores
+PRAGMA foreign_keys = ON;
+
+DROP TABLE IF EXISTS emprestimos;
+DROP TABLE IF EXISTS livros;
+DROP TABLE IF EXISTS usuarios;
+DROP TABLE IF EXISTS autores;
+DROP TABLE IF EXISTS editoras;
+
+-- 1. Autores
 CREATE TABLE autores (
-    autor_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    autor_nome VARCHAR(150) UNIQUE NOT NULL
+    autor_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome_autor TEXT NOT NULL UNIQUE
 );
 
--- 2. Tabela de editoras
+-- 2. Editoras
 CREATE TABLE editoras (
-    editora_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    editora_nome VARCHAR(150) UNIQUE NOT NULL
+    editora_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome_editora TEXT NOT NULL UNIQUE
 );
 
--- 3. Tabela de usuários
+-- 3. Usuários
 CREATE TABLE usuarios (
-    usuario_id INTEGER PRIMARY KEY,
-    nome_usuario VARCHAR(150) NOT NULL,
-    email_usuario VARCHAR(150),
-    curso VARCHAR(100)
+    usuario_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome_usuario TEXT NOT NULL UNIQUE
 );
 
--- 4. Tabela de livros
+-- 4. Livros
 CREATE TABLE livros (
-    livro_id INTEGER PRIMARY KEY,
-    isbn VARCHAR(30),
-    titulo_livro VARCHAR(200) NOT NULL,
-    ano_publicacao INTEGER,
-    categoria VARCHAR(100),
-    autor_id INTEGER REFERENCES autores(autor_id),
-    editora_id INTEGER REFERENCES editoras(editora_id)
+    livro_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    isbn TEXT NOT NULL UNIQUE,
+    autor_id INTEGER NOT NULL,
+    editora_id INTEGER NOT NULL,
+    FOREIGN KEY (autor_id) REFERENCES autores(autor_id),
+    FOREIGN KEY (editora_id) REFERENCES editoras(editora_id)
 );
 
--- 5. Tabela de exemplares
-CREATE TABLE exemplares (
-    exemplar_codigo VARCHAR(50) PRIMARY KEY,
-    livro_id INTEGER NOT NULL REFERENCES livros(livro_id)
-);
-
--- 6. Tabela de funcionários
-CREATE TABLE funcionarios (
-    funcionario_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    nome_funcionario VARCHAR(150) UNIQUE NOT NULL
-);
-
--- 7. Tabela de campi
-CREATE TABLE campi (
-    campus_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    nome_campus VARCHAR(150) UNIQUE NOT NULL
-);
-
--- 8. Tabela de empréstimos
+-- 5. Empréstimos
 CREATE TABLE emprestimos (
-    emprestimo_id INTEGER PRIMARY KEY,
-    usuario_id INTEGER NOT NULL REFERENCES usuarios(usuario_id),
-    exemplar_codigo VARCHAR(50) NOT NULL REFERENCES exemplares(exemplar_codigo),
-    data_emprestimo DATE,
-    data_prevista DATE,
+    emprestimo_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    usuario_id INTEGER NOT NULL,
+    livro_id INTEGER NOT NULL,
     data_devolucao DATE,
-    status_emprestimo VARCHAR(50),
-    funcionario_id INTEGER REFERENCES funcionarios(funcionario_id),
-    campus_id INTEGER REFERENCES campi(campus_id),
-    observacoes TEXT
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(usuario_id),
+    FOREIGN KEY (livro_id) REFERENCES livros(livro_id)
 );
 
--- ÍNDICE PARA FACILITAR A BUSCA PELA DATA DE DEVOLUÇÃO
-CREATE INDEX idx_emprestimos_data_devolucao
-ON emprestimos(data_devolucao);
+-- Inserir autores
+INSERT INTO autores (nome_autor)
+SELECT DISTINCT nome_autor
+FROM emprestimos_biblioteca;
 
--- ==========================================
--- MIGRAÇÃO DOS DADOS DA TABELA ORIGINAL
--- ==========================================
+-- Inserir editoras
+INSERT INTO editoras (nome_editora)
+SELECT DISTINCT editora
+FROM emprestimos_biblioteca;
 
-INSERT INTO autores (autor_nome)
-SELECT DISTINCT autor_nome
-FROM emprestimos_biblioteca
-WHERE autor_nome IS NOT NULL
-ON CONFLICT (autor_nome) DO NOTHING;
+-- Inserir usuários
+INSERT INTO usuarios (nome_usuario)
+SELECT DISTINCT usuario
+FROM emprestimos_biblioteca;
 
-INSERT INTO editoras (editora_nome)
-SELECT DISTINCT editora_nome
-FROM emprestimos_biblioteca
-WHERE editora_nome IS NOT NULL
-ON CONFLICT (editora_nome) DO NOTHING;
-
-INSERT INTO usuarios
-SELECT DISTINCT ON (usuario_id)
-    usuario_id, nome_usuario, email_usuario, curso
-FROM emprestimos_biblioteca
-ORDER BY usuario_id;
-
-INSERT INTO livros (
-    livro_id, isbn, titulo_livro, ano_publicacao,
-    categoria, autor_id, editora_id
-)
-SELECT DISTINCT ON (b.livro_id)
-    b.livro_id,
+-- Inserir livros
+INSERT INTO livros (isbn, autor_id, editora_id)
+SELECT DISTINCT
     b.isbn,
-    b.titulo_livro,
-    b.ano_publicacao,
-    b.categoria,
     a.autor_id,
     e.editora_id
 FROM emprestimos_biblioteca b
-LEFT JOIN autores a ON a.autor_nome = b.autor_nome
-LEFT JOIN editoras e ON e.editora_nome = b.editora_nome
-ORDER BY b.livro_id;
+JOIN autores a ON a.nome_autor = b.nome_autor
+JOIN editoras e ON e.nome_editora = b.editora;
 
-INSERT INTO exemplares (exemplar_codigo, livro_id)
-SELECT DISTINCT ON (exemplar_codigo)
-    exemplar_codigo, livro_id
-FROM emprestimos_biblioteca
-ORDER BY exemplar_codigo;
-
-INSERT INTO funcionarios (nome_funcionario)
-SELECT DISTINCT funcionario_responsavel
-FROM emprestimos_biblioteca
-WHERE funcionario_responsavel IS NOT NULL
-ON CONFLICT (nome_funcionario) DO NOTHING;
-
-INSERT INTO campi (nome_campus)
-SELECT DISTINCT campus
-FROM emprestimos_biblioteca
-WHERE campus IS NOT NULL
-ON CONFLICT (nome_campus) DO NOTHING;
-
-INSERT INTO emprestimos (
-    emprestimo_id, usuario_id, exemplar_codigo,
-    data_emprestimo, data_prevista, data_devolucao,
-    status_emprestimo, funcionario_id, campus_id, observacoes
-)
+-- Inserir empréstimos
+INSERT INTO emprestimos (usuario_id, livro_id, data_devolucao)
 SELECT
-    b.emprestimo_id,
-    b.usuario_id,
-    b.exemplar_codigo,
-    b.data_emprestimo,
-    b.data_prevista,
-    b.data_devolucao,
-    b.status_emprestimo,
-    f.funcionario_id,
-    c.campus_id,
-    b.observacoes
+    u.usuario_id,
+    l.livro_id,
+    b.data_devolucao
 FROM emprestimos_biblioteca b
-LEFT JOIN funcionarios f
-    ON f.nome_funcionario = b.funcionario_responsavel
-LEFT JOIN campi c
-    ON c.nome_campus = b.campus;
+JOIN usuarios u ON u.nome_usuario = b.usuario
+JOIN livros l ON l.isbn = b.isbn;
+
+-- Índice na data de devolução
+CREATE INDEX idx_emprestimos_data_devolucao
+ON emprestimos(data_devolucao);
