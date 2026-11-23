@@ -11,3 +11,13 @@ O projeto busca resolver problemas de redundância na tabela Emprestimos, separa
 - Evitar dados duplicados.
 - Utilizar chaves primárias e estrangeiras.
 - Criar índices para melhorar o desempenho.
+
+## Organização do projeto
+
+O banco de dados foi dividido em tabelas relacionadas para evitar
+duplicidade de informações.
+
+Foram criados scripts para:
+- Estrutura das tabelas e relacionamentos.
+- Inserção de dados para testes.
+- Consultas SQL para análise dos empréstimos.
